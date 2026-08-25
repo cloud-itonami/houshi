@@ -1,0 +1,29 @@
+#!/usr/bin/env nbb
+;; run_tests.cljs — houshi の面契約検査。
+;;
+;;   nbb --classpath test run_tests.cljs
+;;
+;; houshi は thin-edge dispatcher で、この repo の実体は『dispatcher / adapter /
+;; lexicon / kotodama.jsonld / wrangler.jsonc の 5 面が同じことを言っている』
+;; という合意である。spores.ts の決定ロジックは kotoba/ の vitest が見るが、
+;; あちらは git 依存の install を要する（環境によっては回せない）。この runner は
+;; 依存ゼロの nbb + cljs.test で、面の合意だけを毎回確かめる。
+;;
+;; workspace 規則（superproject CLAUDE.md）: 新規の検証ハーネスは nbb で書く。
+(ns run-tests
+  (:require [clojure.test :as t]
+            [houshi.contract-test]))
+
+(def green-marker
+  "scripts/maturity-loop/mutations.edn の `:green-marker`。全部緑のときだけ出す ——
+   出力に現れるかどうかで mutation が噛んだかを判定するので、緑でないときに
+   印字してはならない。"
+  "houshi contract: all green")
+
+(defmethod t/report [:cljs.test/default :end-run-tests] [m]
+  (if (t/successful? m)
+    (println (str "\n" green-marker))
+    (do (println "\nhoushi contract: FAILED")
+        (js/process.exit 1))))
+
+(t/run-tests 'houshi.contract-test)

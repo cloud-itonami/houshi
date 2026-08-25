@@ -1,0 +1,169 @@
+(ns houshi.contract-test
+  "houshi の面どうしの契約を固定する。
+
+  houshi は thin-edge dispatcher で、業務ロジックはほぼ持たない —— この repo の
+  実体は『5 つの面が同じことを言っている』という合意そのものである:
+
+    src/app.ts                  dispatcher（/health が method 表と DID を名乗る）
+    xrpc-adapter/src/index.ts   XRPC route 表（NSID → handler / HTTP method）
+    kotoba/src/spores.ts        lexicon 実装（collection 名・export された手続き）
+    kotoba/src/types.ts         record 型と DID 階層
+    kotodama.jsonld             actor identity 文書（@id / nanoid / capabilities）
+    wrangler.jsonc              配備（routes / APP_* vars）
+
+  どの面も他の面を import していないので、片方だけ直した drift は throw しない
+  —— dispatcher が /health で名乗る method を adapter が持っていなくても、
+  デプロイは成功し、クライアントが叩いて初めて NotFound になる。vitest 側
+  （kotoba/test/houshi.test.ts）は spores.ts の決定ロジックを見るが、面の合意は
+  誰も見ていなかった。ここが見る。
+
+  抽出の床: 各抽出は見つからなければ throw する。『抽出できなかった』が
+  『合意している』と同じ顔をしてはならない（superproject CLAUDE.md の 6 問）。"
+  (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is testing]]
+            ["fs" :as fs]))
+
+;; ─── 抽出（見つからなければ throw。沈黙して nil を返さない） ───────────
+
+(defn- slurp-file [path]
+  (fs/readFileSync path "utf8"))
+
+(defn- extract-1
+  "regex の group 1 を返す。当たらなければ、どのファイルの何を探していたかを
+   名指しして throw する —— リファクタで形が変わったら、このテストは
+   『合意が壊れた』ではなく『測れなくなった』と言って赤くなる。"
+  [src re path what]
+  (or (second (re-find re src))
+      (throw (ex-info (str "extraction failed: " what " not found in " path)
+                      {:path path :what what}))))
+
+(defn- non-empty!
+  [coll path what]
+  (when (empty? coll)
+    (throw (ex-info (str "extraction floor: 0 " what " extracted from " path
+                         " — the surface moved; this is could-not-answer, not agreement")
+                    {:path path :what what})))
+  coll)
+
+;; ─── 各面の読み取り ─────────────────────────────────────────────────────
+
+(def app-ts (delay (slurp-file "src/app.ts")))
+(def adapter-ts (delay (slurp-file "xrpc-adapter/src/index.ts")))
+(def spores-ts (delay (slurp-file "kotoba/src/spores.ts")))
+(def types-ts (delay (slurp-file "kotoba/src/types.ts")))
+
+(def dispatcher
+  (delay
+  {:nsid-prefix (extract-1 @app-ts #"const NSID_PREFIX = \"([^\"]+)\"" "src/app.ts" "NSID_PREFIX")
+   :actor-did   (extract-1 @app-ts #"const ACTOR_DID = \"([^\"]+)\"" "src/app.ts" "ACTOR_DID")
+   :nanoid-fallback (extract-1 @app-ts #"env\.APP_NANOID \?\? \"([^\"]+)\"" "src/app.ts" "APP_NANOID fallback")
+   :methods (->> (extract-1 @app-ts #"methods: \[([^\]]*)\]" "src/app.ts" "/health methods list")
+                 (re-seq #"\"(\w+)\"")
+                 (map second)
+                 (#(non-empty! % "src/app.ts" "advertised methods"))
+                 set)}))
+
+(def adapter
+  (delay
+  {:nsid-base (extract-1 @adapter-ts #"const NSID_BASE = \"([^\"]+)\"" "xrpc-adapter/src/index.ts" "NSID_BASE")
+   ;; route 表: [`${NSID_BASE}.<suffix>`]: { method: "<M>", handler: ... houshiRwFree.<fn>(...)
+   :routes (->> (re-seq #"\[`\$\{NSID_BASE\}\.(\w+)`\]: \{ method: \"(GET|POST)\", handler: [^}]*houshiRwFree\.(\w+)\("
+                        @adapter-ts)
+                (map (fn [[_ suffix method handler]]
+                       {:suffix suffix :http-method method :handler handler}))
+                (#(non-empty! % "xrpc-adapter/src/index.ts" "XRPC routes")))}))
+
+(def lexicon
+  (delay
+  {:spore-collection     (extract-1 @spores-ts #"const SPORE_COLLECTION = \"([^\"]+)\"" "kotoba/src/spores.ts" "SPORE_COLLECTION")
+   :germinate-collection (extract-1 @spores-ts #"const GERMINATE_COLLECTION = \"([^\"]+)\"" "kotoba/src/spores.ts" "GERMINATE_COLLECTION")
+   :exported-fns (->> (re-seq #"export async function (\w+)\(" @spores-ts)
+                      (map second)
+                      (#(non-empty! % "kotoba/src/spores.ts" "exported procedures"))
+                      set)}))
+
+(def did-prefix
+  (delay (extract-1 @types-ts #"HOUSHI_DID_PREFIX = \"([^\"]+)\"" "kotoba/src/types.ts" "HOUSHI_DID_PREFIX")))
+
+(def kotodama
+  (delay (js->clj (js/JSON.parse (slurp-file "kotodama.jsonld")) :keywordize-keys true)))
+
+(def wrangler
+  (delay
+  ;; .jsonc — 行頭コメントだけ落として JSON として読む。parse できなければ
+  ;; そのまま throw（読めない配備定義は『合意不明』であって『合意』ではない）。
+  (js->clj (js/JSON.parse (str/replace (slurp-file "wrangler.jsonc") #"(?m)^\s*//.*$" ""))
+           :keywordize-keys true)))
+
+;; ─── 不変条件 ───────────────────────────────────────────────────────────
+
+(deftest xrpc-method-surface-agrees-across-dispatcher-adapter-and-lexicon
+  (testing "dispatcher が /health で名乗る method 表 == adapter の route 表"
+    (is (= (:methods @dispatcher)
+           (set (map :suffix (:routes @adapter))))
+        "app.ts の methods と xrpc-adapter の routes が食い違うと、/health で発見した method が NotFound になる（またはその逆に、名乗られない method が生きる）"))
+  (testing "adapter の各 route は、route 名と同名の手続きへ委譲している"
+    (doseq [{:keys [suffix handler]} (:routes @adapter)]
+      (is (= suffix handler)
+          (str "route " suffix " が別名の handler " handler " へ委譲している — NSID と実装の対応が暗黙に捻れる"))))
+  (testing "adapter が委譲する手続きは lexicon 実装が実際に export している"
+    (doseq [{:keys [handler]} (:routes @adapter)]
+      (is (contains? (:exported-fns @lexicon) handler)
+          (str "adapter が houshiRwFree." handler " を呼ぶが spores.ts はそれを export していない — ビルドは通り、呼んだ時に落ちる"))))
+  (testing "3 面とも手続きはちょうど 3 つ（storeSpore / germinate / listSpores）"
+    (is (= 3 (count (:methods @dispatcher))))
+    (is (= 3 (count (:routes @adapter))))
+    (is (= 3 (count (:exported-fns @lexicon))))))
+
+(deftest nsid-prefix-agrees-and-collections-live-under-it
+  (testing "dispatcher の NSID_PREFIX == adapter の NSID_BASE + '.'"
+    (is (= (:nsid-prefix @dispatcher) (str (:nsid-base @adapter) "."))
+        "prefix が食い違うと dispatcher は adapter に無い NSID を proxy する（またはその逆）"))
+  (testing "PDS collection は同じ NSID 空間の下にある"
+    (is (str/starts-with? (:spore-collection @lexicon) (:nsid-prefix @dispatcher)))
+    (is (str/starts-with? (:germinate-collection @lexicon) (:nsid-prefix @dispatcher)))))
+
+(deftest actor-identity-agrees-across-dispatcher-kotodama-and-record-types
+  (testing "actor DID: dispatcher == kotodama.jsonld の @id"
+    (is (= (:actor-did @dispatcher) (get @kotodama (keyword "@id")))
+        "identity 文書と実際に応答する worker が別の DID を名乗ると、DID 解決した相手と喋る相手が別人になる"))
+  (testing "record DID 階層は actor DID の直下"
+    (is (= @did-prefix (str (:actor-did @dispatcher) ":"))
+        "types.ts の HOUSHI_DID_PREFIX が actor DID からずれると、SporeRecord の did が別 actor の名前空間に発行される"))
+  (testing "nanoid: kotodama.jsonld == wrangler APP_NANOID == dispatcher fallback"
+    (let [jsonld-nanoid (:nanoid @kotodama)
+          wrangler-nanoid (get-in @wrangler [:vars :APP_NANOID])]
+      (is (= jsonld-nanoid wrangler-nanoid))
+      (is (= jsonld-nanoid (:nanoid-fallback @dispatcher)))
+      (is (= (str "kotodama-" jsonld-nanoid) (:name @wrangler))
+          "worker 名は kotodama-<nanoid> 規約 — 外れると kotodama fleet の逆引きから消える"))))
+
+(deftest declared-capabilities-agree-between-kotodama-and-wrangler
+  (let [jsonld-caps (set (get-in @kotodama [:profile :capabilities]))
+        wrangler-caps (set (js->clj (js/JSON.parse (get-in @wrangler [:vars :APP_CAPABILITIES]))))]
+    (is (seq jsonld-caps) "kotodama.jsonld が capability を 1 つも名乗っていない")
+    (is (= jsonld-caps wrangler-caps)
+        "identity 文書と配備 vars で capability 表が食い違うと、discovery した能力と runtime が名乗る能力が別物になる")))
+
+(deftest worker-routes-serve-the-actor-domain
+  (let [patterns (set (map :pattern (:routes @wrangler)))
+        actor-host (str/replace (:actor-did @dispatcher) #"^did:web:" "")]
+    (is (contains? patterns (str actor-host "/*"))
+        (str "wrangler routes が actor DID のホスト " actor-host " を配信していない — did:web の解決先に worker が居ない"))
+    (is (contains? patterns (str (:nanoid @kotodama) ".etzhayyim.com/*"))
+        "nanoid ホスト（kotodama fleet の一律 addressing）が routes に無い")
+    (doseq [r (:routes @wrangler)]
+      (is (= "etzhayyim.com" (:zone_name r))))))
+
+(deftest read-methods-are-get-and-write-methods-are-post
+  ;; lexicon の意味論: listSpores は query（副作用なし・GET）、storeSpore /
+  ;; germinate は procedure（書き込み・POST）。dispatcher は GET の query params
+  ;; を body に畳んで転送するので、adapter 側が GET を受けなくなると
+  ;; 「POST で叩けば動く」まま GET クライアントだけが静かに壊れる。
+  (let [by-suffix (into {} (map (juxt :suffix :http-method) (:routes @adapter)))]
+    (is (= "GET" (get by-suffix "listSpores"))
+        "listSpores は query — GET を受けなければ列挙クライアントが壊れる")
+    (is (= "POST" (get by-suffix "storeSpore"))
+        "storeSpore は procedure — GET で書き込みを受けてはならない")
+    (is (= "POST" (get by-suffix "germinate"))
+        "germinate は procedure — GET で書き込みを受けてはならない")))
