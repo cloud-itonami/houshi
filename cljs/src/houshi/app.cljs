@@ -33,11 +33,29 @@
     (ns g (:require [jp-go-dds.page :as page] [\"fs\" :as fs]))
     (def css (fs/readFileSync \"'\"$D\"'/resources/jp_go_dds/dds.css\" \"utf8\"))
     (fs/writeFileSync \"public/index.html\"
-      (page/->page {:title \"etzhayyim-project-houshi\" :lang \"ja\"
-                    :description \"houshi — sporulation custody layer appview (reagent + re-frame + jp-go-dds).\"
+      (page/->page {:title \"houshi\" :lang \"en\"
+                    :description \"houshi (胞子) — spore custody surface scaffold\"
                     :css css}
-                   [:div {:id \"app\"} \"etzhayyim-project-houshi loading…\"]
-                   [:script {:src \"js/app.js\"}]))'"
+                   [:div {:id \"app\"} \"houshi loading…\"]
+                   [:noscript \"houshi requires JavaScript.\"]
+                   [:script {:src \"js/app.js\"}]))'
+
+  Every argument above is load-bearing and fails silently if changed --
+  the regenerated page still renders correctly in a browser:
+
+  - `:lang` is \"en\". This scaffold's labels (Project / Routes / XRPC /
+    Public Routes / Runtime Bindings / Source) are English, so declaring
+    \"ja\" mis-announces the page to screen readers.
+  - `->page` does not emit a `<noscript>` fallback on its own; it has to
+    be passed as a child, or the no-JavaScript message is dropped.
+  - The title, description and loading text belong to this repo. Do not
+    substitute the generic values from a migration prompt or from a
+    sibling appview.
+
+  A pin advance that does not re-run this command leaves the shell at the
+  old sha, and comparing the vendored `dds.css` between the two shas does
+  not reveal it: `->page` concatenates `dds.css` with
+  `jp-go-dds.core/ext-css`, and the upstream fixes live in core.cljc."
   (:require [reagent.dom :as rdom]
             [re-frame.core :as rf]
             [jp-go-dds.core :as dds]))
@@ -48,6 +66,20 @@
 ;; object with no reactivity at all. It is kept as re-frame db + subs here
 ;; so the migration exercises the event/sub plumbing the workspace standard
 ;; calls for, without inventing state the original page did not have.
+;;
+;; `:xrpc?` stays true here, and that is NOT an oversight -- do not
+;; "harmonize" it with the sibling appviews that set it false. Those repos
+;; served /xrpc/* from the SvelteKit worker this migration deleted, so once
+;; wrangler.jsonc's `main` key was dropped nothing served that path. houshi
+;; is different: `xrpc-adapter/wrangler.jsonc` declares a SEPARATE Worker
+;; ("houshi-xrpc-adapter") whose route `houshi.etzhayyim.com/xrpc/*` is more
+;; specific than this surface's `houshi.etzhayyim.com/*`, so XRPC is served
+;; independently of anything this config does.
+;;
+;; That is a claim about the declared configuration. Whether the adapter is
+;; currently deployed is UNMEASURED: houshi.etzhayyim.com did not resolve
+;; when checked on 2026-09-07, and a name that does not resolve is not
+;; evidence either way.
 
 (def default-db
   {:title "Ai etzhayyim Project Houshi"
