@@ -12,7 +12,32 @@
   fronts lives in `src/app.ts` / `xrpc-adapter/` / `kotoba/` — see
   `test/houshi/contract_test.cljs` at the repo root for the cross-surface
   contract that ties those together. This view does not touch that
-  contract; it only displays a copy of the same declared shape."
+  contract; it only displays a copy of the same declared shape.
+
+  `public/index.html`'s inlined <style> was produced once, at authoring
+  time, by `jp-go-dds.page/->page` running under nbb (JVM-free — this
+  repo's runtime priority order puts nbb ahead of the JVM), concatenating
+  the vendored `dds.css` with `jp-go-dds.core`'s ext-rules. This namespace
+  only requires `jp-go-dds.core` at runtime; `jp-go-dds.page` and
+  `html.core` are authoring-time-only tools used to generate the static
+  shell once. Regenerate that shell (e.g. if jp-go-dds's core components,
+  ext-rules, or vendored dds.css change — this repo pins jp-go-dds at
+  this deps.edn's `:git/sha`, currently
+  3950c1ae200c9ae33869576f893714c01d82d5f8) from this `cljs/` dir with:
+
+    R=<superproject root>
+    D=$R/orgs/kotoba-lang/jp-go-digital-design-system  # checked out at the pinned sha above
+    H=$R/orgs/kotoba-lang/html
+    C=$R/orgs/kotoba-lang/css
+    nbb --classpath \"$D/src:$D/resources:$H/src:$C/src\" -e '
+    (ns g (:require [jp-go-dds.page :as page] [\"fs\" :as fs]))
+    (def css (fs/readFileSync \"'\"$D\"'/resources/jp_go_dds/dds.css\" \"utf8\"))
+    (fs/writeFileSync \"public/index.html\"
+      (page/->page {:title \"etzhayyim-project-houshi\" :lang \"ja\"
+                    :description \"houshi — sporulation custody layer appview (reagent + re-frame + jp-go-dds).\"
+                    :css css}
+                   [:div {:id \"app\"} \"etzhayyim-project-houshi loading…\"]
+                   [:script {:src \"js/app.js\"}]))'"
   (:require [reagent.dom :as rdom]
             [re-frame.core :as rf]
             [jp-go-dds.core :as dds]))
