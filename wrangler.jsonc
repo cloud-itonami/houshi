@@ -1,6 +1,5 @@
 {
   "name": "kotodama-h0ush001",
-  "main": "svelte/.svelte-kit/cloudflare/_worker.js",
   "compatibility_date": "2025-03-17",
   "compatibility_flags": [
     "nodejs_compat",
@@ -10,7 +9,7 @@
     "APP_CAPABILITIES": "[\"spore-custody\",\"spore-germination\",\"spore-list\"]",
     "APP_DESCRIPTION": "houshi (胞子) — sporulation custody layer. Stores dormant spore blobs, manages quorum-based custody, and handles germination (revival) of sporulated agents.",
     "APP_DISPLAY_NAME": "Houshi Spore Custody",
-    "APP_FRAMEWORK": "sveltekit-edge-bff",
+    "APP_FRAMEWORK": "cljs-reagent-re-frame-jp-go-dds",
     "APP_NANOID": "h0ush001",
     "APP_PERFORMER_TYPE": "service",
     "APP_UI_TYPE": "yoro",
@@ -35,7 +34,7 @@
     }
   ],
   "assets": {
-    "directory": "./svelte/.svelte-kit/cloudflare/client",
+    "directory": "./cljs/public",
     "binding": "ASSETS",
     "html_handling": "auto-trailing-slash",
     "not_found_handling": "none"

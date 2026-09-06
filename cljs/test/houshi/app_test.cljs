@@ -1,0 +1,44 @@
+(ns houshi.app-test
+  (:require [cljs.test :refer [deftest is testing use-fixtures]]
+            [re-frame.core :as rf]
+            [re-frame.db :as rf-db]
+            [houshi.app :as app]))
+
+(use-fixtures :each
+  {:before (fn [] (rf/clear-subscription-cache!) (reset! rf-db/app-db {}))})
+
+(deftest initialize-db-sets-defaults
+  (testing ":initialize-db populates the default scaffold data"
+    (rf/dispatch-sync [:initialize-db])
+    (is (= app/default-db @rf-db/app-db))
+    (is (= "Ai etzhayyim Project Houshi" @(rf/subscribe [:title])))
+    (is (= "etzhayyim-project-houshi" @(rf/subscribe [:project])))
+    (is (= "etzhayyim-project-houshi" @(rf/subscribe [:app-name])))
+    (is (= "cloudflare surface" @(rf/subscribe [:kind])))
+    (is (= 0 @(rf/subscribe [:route-count])))
+    (is (= [] @(rf/subscribe [:routes])))
+    (is (= [] @(rf/subscribe [:vars])))
+    (is (= true @(rf/subscribe [:xrpc?])))
+    (is (= "60-apps/etzhayyim-project-houshi/cljs/src/houshi/app.cljs"
+           @(rf/subscribe [:relative-path])))))
+
+(deftest routes-sub-reflects-db-not-a-fixed-value
+  (testing ":routes subscription reads whatever is in the db, not a hardcoded empty list"
+    (reset! rf-db/app-db {:routes ["com.etzhayyim.houshi.storeSpore"]})
+    (is (= ["com.etzhayyim.houshi.storeSpore"] @(rf/subscribe [:routes])))))
+
+(deftest vars-sub-reflects-db-not-a-fixed-value
+  (testing ":vars subscription reads whatever is in the db, not a hardcoded empty list"
+    (reset! rf-db/app-db {:vars ["APP_NANOID"]})
+    (is (= ["APP_NANOID"] @(rf/subscribe [:vars])))))
+
+(deftest xrpc-sub-reflects-db
+  (testing ":xrpc? subscription reads whatever is in the db"
+    (reset! rf-db/app-db {:xrpc? false})
+    (is (= false @(rf/subscribe [:xrpc?])))))
+
+(deftest initialize-db-overwrites-prior-state
+  (testing ":initialize-db resets to defaults even if the db already had other data"
+    (reset! rf-db/app-db {:title "stale" :routes ["stale-route"] :unrelated 42})
+    (rf/dispatch-sync [:initialize-db])
+    (is (= app/default-db @rf-db/app-db))))
