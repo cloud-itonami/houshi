@@ -19,7 +19,7 @@
 
   抽出の床: 各抽出は見つからなければ throw する。『抽出できなかった』が
   『合意している』と同じ顔をしてはならない（superproject CLAUDE.md の 6 問）。"
-  (:require [clojure.string :as str]
+  (:require [kotoba.lang.text :as str]
             [clojure.test :refer [deftest is testing]]
             ["fs" :as fs]))
 
