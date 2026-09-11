@@ -19,7 +19,7 @@
     (is (= [] @(rf/subscribe [:routes])))
     (is (= [] @(rf/subscribe [:vars])))
     (is (= true @(rf/subscribe [:xrpc?])))
-    (is (= "60-apps/etzhayyim-project-houshi/cljs/src/houshi/app.cljs"
+    (is (= "60-apps/etzhayyim-project-houshi/cljs/src/houshi/app.cljk"
            @(rf/subscribe [:relative-path])))))
 
 (deftest routes-sub-reflects-db-not-a-fixed-value

@@ -1,7 +1,7 @@
 #!/usr/bin/env nbb
-;; run_tests.cljs — houshi の面契約検査。
+;; run_tests.cljk — houshi の面契約検査。
 ;;
-;;   nbb --classpath test run_tests.cljs
+;;   nbb --classpath test run_tests.cljk
 ;;
 ;; houshi は thin-edge dispatcher で、この repo の実体は『dispatcher / adapter /
 ;; lexicon / kotodama.jsonld / wrangler.jsonc の 5 面が同じことを言っている』
