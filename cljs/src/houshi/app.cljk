@@ -10,7 +10,7 @@
   Svelte scaffold did not have: `routes` and `vars` were empty lists there
   and remain empty lists here. The live XRPC dispatch logic this app
   fronts lives in `src/app.ts` / `xrpc-adapter/` / `kotoba/` — see
-  `test/houshi/contract_test.cljs` at the repo root for the cross-surface
+  `test/houshi/contract_test.cljk` at the repo root for the cross-surface
   contract that ties those together. This view does not touch that
   contract; it only displays a copy of the same declared shape.
 
@@ -90,7 +90,7 @@
    :routes []
    :vars []
    :xrpc? true
-   :relative-path "60-apps/etzhayyim-project-houshi/cljs/src/houshi/app.cljs"})
+   :relative-path "60-apps/etzhayyim-project-houshi/cljs/src/houshi/app.cljk"})
 
 (rf/reg-event-db
  :initialize-db
