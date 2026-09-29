@@ -9,7 +9,7 @@
 ;; あちらは git 依存の install を要する（環境によっては回せない）。この runner は
 ;; 依存ゼロの nbb + cljs.test で、面の合意だけを毎回確かめる。
 ;;
-;; workspace 規則（superproject CLAUDE.md）: 新規の検証ハーネスは nbb で書く。
+;; workspace 規則（superproject AGENTS.md）: 新規の検証ハーネスは nbb で書く。
 (ns run-tests
   (:require [kotoba.test :as t]
             [houshi.contract-test]))
